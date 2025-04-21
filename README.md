@@ -1,4 +1,4 @@
-# NetworKit
+# Rocket
 
 A lightweight, modular networking framework for Swift applications.
 
@@ -24,11 +24,11 @@ A lightweight, modular networking framework for Swift applications.
 
 ### Swift Package Manager
 
-Add NetworKit as a dependency to your Package.swift file:
+Add Rocket as a dependency to your Package.swift file:
 
 ```swift
 dependencies: [
-    .package(url: "path/to/NetworKit", .upToNextMajor(from: "1.0.0"))
+    .package(url: "https://github.com/ahmadMNT/Rocket", .upToNextMajor(from: "1.0.0"))
 ]
 ```
 
@@ -158,4 +158,4 @@ class MyTokenManager: TokenManaging {
 
 ## License
 
-NetworKit is available under the MIT license. 
+Rocket is available under the MIT license. 
