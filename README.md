@@ -1,4 +1,4 @@
-# Rocket
+# 🚀 Rocket 🚀
 
 A lightweight, modular networking framework for Swift applications.
 
