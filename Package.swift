@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "Rocket",
+    name: "RocketNetwork",
     platforms: [
         .iOS(.v14),
         .macOS(.v11)
@@ -12,8 +12,8 @@ let package = Package(
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
-            name: "Rocket",
-            targets: ["Rocket"]),
+            name: "RocketNetwork",
+            targets: ["RocketNetwork"]),
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
@@ -22,12 +22,12 @@ let package = Package(
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
         .target(
-            name: "Rocket",
+            name: "RocketNetwork",
             dependencies: [],
             path: "Sources"),
         .testTarget(
-            name: "RocketTests",
-            dependencies: ["Rocket"],
+            name: "RocketNetworkTests",
+            dependencies: ["RocketNetwork"],
             path: "Tests")
     ],
     swiftLanguageVersions: [.v5]

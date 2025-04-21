@@ -1,8 +1,8 @@
 //
-//  Rocket.swift
-//  Rocket
+//  RocketNetwork.swift
+//  RocketNetwork
 //
-//  Created as part of the Rocket module.
+//  Created as part of the RocketNetwork module.
 //
 
 import Foundation
