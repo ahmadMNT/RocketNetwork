@@ -7,13 +7,13 @@ let package = Package(
     name: "RocketNetwork",
     platforms: [
         .iOS(.v14),
-        .macOS(.v11)
+        .macOS(.v11),
     ],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
             name: "RocketNetwork",
-            targets: ["RocketNetwork"]),
+            targets: ["RocketNetwork"])
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
@@ -28,7 +28,7 @@ let package = Package(
         .testTarget(
             name: "RocketNetworkTests",
             dependencies: ["RocketNetwork"],
-            path: "Tests")
+            path: "Tests"),
     ],
     swiftLanguageVersions: [.v5]
-) 
+)

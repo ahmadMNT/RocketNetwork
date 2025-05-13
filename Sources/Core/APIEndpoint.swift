@@ -71,76 +71,78 @@ public protocol RetryBehavior {
 }
 
 /// Represents an API endpoint for making network requests
-public protocol APIEndpoint: URLComponents, HTTPRequest, APIAuthentication, APIParameters, RetryBehavior {
+public protocol APIEndpoint: URLComponents, HTTPRequest, APIAuthentication, APIParameters,
+    RetryBehavior
+{
     /// Builds the URLRequest for this endpoint
     func buildURLRequest() -> URLRequest
 }
 
 /// Default implementation of APIEndpoint
-public extension APIEndpoint {
-    var scheme: String {
-        return "https" // Default to secure HTTPS
+extension APIEndpoint {
+    public var scheme: String {
+        return "https"  // Default to secure HTTPS
     }
 
-    var port: Int? {
-        return nil // Default to standard port for the scheme
+    public var port: Int? {
+        return nil  // Default to standard port for the scheme
     }
 
-    var timeout: TimeInterval {
-        return 30.0 // Default 30 seconds timeout
+    public var timeout: TimeInterval {
+        return 30.0  // Default 30 seconds timeout
     }
 
-    var encoding: ParameterEncoding {
-        return .json // Default to JSON encoding
+    public var encoding: ParameterEncoding {
+        return .json  // Default to JSON encoding
     }
 
-    var contentType: ContentType {
-        return .json // Default to JSON content type
+    public var contentType: ContentType {
+        return .json  // Default to JSON content type
     }
 
-    var accept: ContentType {
-        return .json // Default to expecting JSON responses
+    public var accept: ContentType {
+        return .json  // Default to expecting JSON responses
     }
 
-    var retryCount: Int {
-        return 1 // Default to 1 retry
+    public var retryCount: Int {
+        return 1  // Default to 1 retry
     }
 
-    var queryParameters: [URLQueryItem] {
-        return [] // Default to empty query parameters
+    public var queryParameters: [URLQueryItem] {
+        return []  // Default to empty query parameters
     }
 
-    var bodyParameters: [String: Any]? {
-        return nil // Default to no body parameters
+    public var bodyParameters: [String: Any]? {
+        return nil  // Default to no body parameters
     }
 
-    var headers: [String: String] {
-        return [:] // Default to empty headers
+    public var headers: [String: String] {
+        return [:]  // Default to empty headers
     }
 
-    var authenticationCredentials: AuthenticationCredentials {
-        return .none // Default to no authentication
+    public var authenticationCredentials: AuthenticationCredentials {
+        return .none  // Default to no authentication
     }
 
-    func getAuthorization() -> [String: String]? {
+    public func getAuthorization() -> [String: String]? {
         switch authenticationCredentials {
-            case .none:
-                return nil
-            case let .bearer(token):
-                return ["Authorization": "Bearer \(token)"]
-            case let .basic(username, password):
-                guard let credentialData = "\(username):\(password)".data(using: .utf8)
-                else { return nil }
-                let base64Credentials = credentialData.base64EncodedString()
-                return ["Authorization": "Basic \(base64Credentials)"]
-            case let .apiKey(key, value):
-                return [key: value]
-            case let .custom(token):
-                return ["Authorization": "Basic \(token)"]
+        case .none:
+            return nil
+        case let .bearer(token):
+            return ["Authorization": "Bearer \(token)"]
+        case let .basic(username, password):
+            guard let credentialData = "\(username):\(password)".data(using: .utf8)
+            else { return nil }
+            let base64Credentials = credentialData.base64EncodedString()
+            return ["Authorization": "Basic \(base64Credentials)"]
+        case let .apiKey(key, value):
+            return [key: value]
+        case let .custom(token):
+            return ["Authorization": "Basic \(token)"]
         }
     }
 
-    var baseURL: URL {
+    public var baseURL: URL {
         var components = Foundation.URLComponents()
         components.scheme = scheme
         components.host = host
@@ -153,7 +155,7 @@ public extension APIEndpoint {
         return url
     }
 
-    func buildURLRequest() -> URLRequest {
+    public func buildURLRequest() -> URLRequest {
         // Start with base URL and append path
         let url = baseURL.appendingPathComponent(path)
 
@@ -200,29 +202,30 @@ public extension APIEndpoint {
 
         // Add body parameters if present and method supports body
         if let bodyParameters = bodyParameters, !bodyParameters.isEmpty,
-           method != .get && method != .head
+            method != .get && method != .head
         {
             do {
                 // Set the body based on the encoding type
                 switch encoding {
-                    case .json:
-                        request.httpBody = try JSONSerialization
-                            .data(withJSONObject: bodyParameters)
-                    case .urlEncoded:
-                        // Create a URL-encoded parameter string
-                        request.httpBody = encodeURLParameters(parameters: bodyParameters)
-                    case let .formData(boundary):
-                        // Create multipart form data with the specified boundary
-                        request.httpBody = encodeFormData(
-                            parameters: bodyParameters,
-                            boundary: boundary
-                        )
-                        request.setValue(
-                            "multipart/form-data; boundary=\(boundary)",
-                            forHTTPHeaderField: "Content-Type"
-                        )
-                    case let .custom(encoder):
-                        request.httpBody = try encoder(bodyParameters)
+                case .json:
+                    request.httpBody =
+                        try JSONSerialization
+                        .data(withJSONObject: bodyParameters)
+                case .urlEncoded:
+                    // Create a URL-encoded parameter string
+                    request.httpBody = encodeURLParameters(parameters: bodyParameters)
+                case let .formData(boundary):
+                    // Create multipart form data with the specified boundary
+                    request.httpBody = encodeFormData(
+                        parameters: bodyParameters,
+                        boundary: boundary
+                    )
+                    request.setValue(
+                        "multipart/form-data; boundary=\(boundary)",
+                        forHTTPHeaderField: "Content-Type"
+                    )
+                case let .custom(encoder):
+                    request.httpBody = try encoder(bodyParameters)
                 }
             } catch {
                 print("Error encoding parameters: \(error)")
@@ -235,40 +238,45 @@ public extension APIEndpoint {
     // Helper function to encode URL parameters
     private func encodeURLParameters(parameters: [String: Any]) -> Data? {
         let parameterString = parameters.map { key, value in
-            let encodedKey = key
+            let encodedKey =
+                key
                 .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? key
             let valueString = String(describing: value)
-            let encodedValue = valueString
+            let encodedValue =
+                valueString
                 .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? valueString
             return "\(encodedKey)=\(encodedValue)"
         }.joined(separator: "&")
         return parameterString.data(using: .utf8)
     }
-    
+
     // Helper function to encode multipart form data
     private func encodeFormData(parameters: [String: Any], boundary: String) -> Data {
         var data = Data()
-        
+
         // Add parameters
         for (key, value) in parameters {
             data.append("--\(boundary)\r\n".data(using: .utf8)!)
-            
+
             if let dataValue = value as? Data {
                 // Handle file data
-                data.append("Content-Disposition: form-data; name=\"\(key)\"; filename=\"file\"\r\n".data(using: .utf8)!)
+                data.append(
+                    "Content-Disposition: form-data; name=\"\(key)\"; filename=\"file\"\r\n".data(
+                        using: .utf8)!)
                 data.append("Content-Type: application/octet-stream\r\n\r\n".data(using: .utf8)!)
                 data.append(dataValue)
                 data.append("\r\n".data(using: .utf8)!)
             } else {
                 // Handle text data
-                data.append("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".data(using: .utf8)!)
+                data.append(
+                    "Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".data(using: .utf8)!)
                 data.append("\(value)\r\n".data(using: .utf8)!)
             }
         }
-        
+
         // Add final boundary
         data.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        
+
         return data
     }
-} 
+}

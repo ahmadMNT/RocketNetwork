@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import NetworKit
 
 final class NetworKitTests: XCTestCase {

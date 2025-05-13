@@ -39,7 +39,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     private let responseProcessor: ResponseProcessorProtocol
     private let sslPinningStrategy: SSLPinningStrategy
     private let reachability: Reachability
-    
+
     // File uploader is optional and can be added if needed
     // private let fileUploader: FileUploader
 
@@ -78,14 +78,16 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             await reachability.startMonitoring()
         }
     }
-    
+
     /// Deinitializer to clean up resources
     deinit {
         // Stop monitoring when the NetworkManager is deallocated
         reachability.stopMonitoring()
     }
 
-    public func performRequest<T: Decodable>(to endpoint: APIEndpoint) async -> Result<T, NetworkError> {
+    public func performRequest<T: Decodable>(to endpoint: APIEndpoint) async -> Result<
+        T, NetworkError
+    > {
         // Check for network connectivity before attempting the request
         if await !isNetworkReachable() {
             logger.logError(NetworkError.noInternetConnection)
@@ -168,8 +170,8 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
 
     private func shouldRetryWithTokenRefresh(error: Error, attempt: Int) -> Bool {
         guard let networkError = error as? NetworkError,
-              networkError.errorType == .unauthenticated && tokenManager.currentToken() != nil,
-              attempt == 0
+            networkError.errorType == .unauthenticated && tokenManager.currentToken() != nil,
+            attempt == 0
         else {
             return false
         }
@@ -183,14 +185,14 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     private func mapError(_ error: Error) -> NetworkError {
         if let urlError = error as? URLError {
             switch urlError.code {
-                case .notConnectedToInternet, .networkConnectionLost:
-                    return .noInternetConnection
-                case .timedOut:
-                    return .requestTimedOut
-                case .cancelled:
-                    return .canceled
-                default:
-                    break
+            case .notConnectedToInternet, .networkConnectionLost:
+                return .noInternetConnection
+            case .timedOut:
+                return .requestTimedOut
+            case .cancelled:
+                return .canceled
+            default:
+                break
             }
         }
 
@@ -244,4 +246,4 @@ extension NetworkManager {
             sslPinningStrategy: noSSLPinningStrategy
         )
     }
-} 
+}

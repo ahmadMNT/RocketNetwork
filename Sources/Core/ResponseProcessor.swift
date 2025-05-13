@@ -44,7 +44,7 @@ public protocol ResponseDecoder {
 /// Simple error response structure used by some APIs
 public struct ErrorResponse: Decodable {
     public let message: String
-    
+
     public init(message: String) {
         self.message = message
     }
@@ -53,7 +53,7 @@ public struct ErrorResponse: Decodable {
 /// Default implementation of ResponseDecoder protocol
 public final class StandardResponseDecoder: ResponseDecoder {
     private let decoder: JSONDecoder
-    
+
     public init(decoder: JSONDecoder = JSONDecoder()) {
         self.decoder = decoder
 
@@ -68,7 +68,8 @@ public final class StandardResponseDecoder: ResponseDecoder {
             if let apiResponse = try? decoder.decode(APIResponse<T>.self, from: data) {
                 // If success is false, return the error message
                 if !apiResponse.success {
-                    throw NetworkError.serverMessage(message: apiResponse.message ?? "Unknown error")
+                    throw NetworkError.serverMessage(
+                        message: apiResponse.message ?? "Unknown error")
                 }
 
                 // If data exists, return it
@@ -104,33 +105,34 @@ public final class StandardResponseDecoder: ResponseDecoder {
 /// Default implementation of StatusCodeHandler
 public final class StandardStatusCodeHandler: StatusCodeHandler {
     public init() {}
-    
+
     public func validate(statusCode: Int) throws {
         switch statusCode {
-            case ResponseStatus.ok, ResponseStatus.created:
-                return // Success, no error to throw
-            case ResponseStatus.unauthenticated:
-                throw NetworkError.unauthenticated
-            case ResponseStatus.expired:
-                throw NetworkError.tokenExpired
-            case ResponseStatus.badRequest:
-                throw NetworkError.badRequest
-            case ResponseStatus.validation:
-                throw NetworkError.validationError(message: "Validation error")
-            case ResponseStatus.notFound:
-                throw NetworkError.notFound
-            case ResponseStatus.upgradeRequired:
-                throw NetworkError.appUpdateRequired
-            case ResponseStatus.noPermessions:
-                throw NetworkError.forbidden
-            case ResponseStatus.serverError:
+        case ResponseStatus.ok, ResponseStatus.created:
+            return  // Success, no error to throw
+        case ResponseStatus.unauthenticated:
+            throw NetworkError.unauthenticated
+        case ResponseStatus.expired:
+            throw NetworkError.tokenExpired
+        case ResponseStatus.badRequest:
+            throw NetworkError.badRequest
+        case ResponseStatus.validation:
+            throw NetworkError.validationError(message: "Validation error")
+        case ResponseStatus.notFound:
+            throw NetworkError.notFound
+        case ResponseStatus.upgradeRequired:
+            throw NetworkError.appUpdateRequired
+        case ResponseStatus.noPermessions:
+            throw NetworkError.forbidden
+        case ResponseStatus.serverError:
+            throw NetworkError.serverError(statusCode: statusCode)
+        default:
+            if statusCode >= 500 {
                 throw NetworkError.serverError(statusCode: statusCode)
-            default:
-                if statusCode >= 500 {
-                    throw NetworkError.serverError(statusCode: statusCode)
-                } else if statusCode >= 400 {
-                    throw NetworkError.serverMessage(message: "Request failed with status code \(statusCode)")
-                }
+            } else if statusCode >= 400 {
+                throw NetworkError.serverMessage(
+                    message: "Request failed with status code \(statusCode)")
+            }
         }
     }
 }
@@ -169,20 +171,20 @@ public final class DefaultResponseProcessor: ResponseProcessorProtocol {
             // Use extractErrorFromData for all non-authentication related errors
             // This way we always try to extract meaningful error messages from the response
             switch error {
-                case .unauthenticated, .tokenExpired, .forbidden, .appUpdateRequired:
-                    // For these specific errors, just pass through the error as is
-                    return .failure(error)
-                case .decodingError:
-                    // Preserve the original decoding error
-                    return .failure(error)
-                default:
-                    // For all other errors, try to extract a more detailed message from the
-                    // response data
-                    return .failure(decoder.extractErrorFromData(data))
+            case .unauthenticated, .tokenExpired, .forbidden, .appUpdateRequired:
+                // For these specific errors, just pass through the error as is
+                return .failure(error)
+            case .decodingError:
+                // Preserve the original decoding error
+                return .failure(error)
+            default:
+                // For all other errors, try to extract a more detailed message from the
+                // response data
+                return .failure(decoder.extractErrorFromData(data))
             }
         } catch {
             // Handle any other errors
             return .failure(NetworkError.decodingError(error))
         }
     }
-} 
+}

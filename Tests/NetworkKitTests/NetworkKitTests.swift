@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import NetworKit
 
 final class NetworKitTests: XCTestCase {
@@ -6,4 +7,4 @@ final class NetworKitTests: XCTestCase {
         // This is a basic test to ensure the testing environment is working
         XCTAssertTrue(true)
     }
-} 
+}

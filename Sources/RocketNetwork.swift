@@ -19,4 +19,4 @@ public typealias TokenManager = TokenManaging
 
 // Factories
 public let SSLPinning = SSLPinningEnabledStrategy.self
-public let NoSSLPinning = SSLPinningDisabledStrategy.self 
+public let NoSSLPinning = SSLPinningDisabledStrategy.self

@@ -16,7 +16,7 @@ public protocol SSLPinningStrategy {
 /// Strategy for disabling SSL pinning
 public final class SSLPinningDisabledStrategy: SSLPinningStrategy {
     public init() {}
-    
+
     public func createSessionDelegate() -> URLSessionDelegate? {
         // Return nil to use the default URLSession delegate
         return nil
@@ -27,7 +27,7 @@ public final class SSLPinningDisabledStrategy: SSLPinningStrategy {
 public final class SSLPinningEnabledStrategy: SSLPinningStrategy {
     private let domain: String
     private let certificateNames: [String]
-    
+
     /// Initialize with domain and certificate names
     /// - Parameters:
     ///   - domain: The domain to validate certificates for
@@ -36,7 +36,7 @@ public final class SSLPinningEnabledStrategy: SSLPinningStrategy {
         self.domain = domain
         self.certificateNames = certificateNames
     }
-    
+
     public func createSessionDelegate() -> URLSessionDelegate? {
         return SSLPinningDelegate(domain: domain, certificateNames: certificateNames)
     }
@@ -46,42 +46,48 @@ public final class SSLPinningEnabledStrategy: SSLPinningStrategy {
 private final class SSLPinningDelegate: NSObject, URLSessionDelegate {
     private let domain: String
     private var certificates: [SecCertificate] = []
-    
+
     init(domain: String, certificateNames: [String]) {
         self.domain = domain
         super.init()
-        
+
         // Load certificates
         for name in certificateNames {
             if let certificatePath = Bundle.main.path(forResource: name, ofType: "cer"),
-               let certificateData = try? Data(contentsOf: URL(fileURLWithPath: certificatePath)),
-               let certificate = SecCertificateCreateWithData(nil, certificateData as CFData) {
+                let certificateData = try? Data(contentsOf: URL(fileURLWithPath: certificatePath)),
+                let certificate = SecCertificateCreateWithData(nil, certificateData as CFData)
+            {
                 certificates.append(certificate)
             }
         }
     }
-    
-    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+
+    func urlSession(
+        _ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
         // Check if this is a server trust challenge for our domain
-        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-              challenge.protectionSpace.host == domain,
-              let serverTrust = challenge.protectionSpace.serverTrust else {
+        guard
+            challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+            challenge.protectionSpace.host == domain,
+            let serverTrust = challenge.protectionSpace.serverTrust
+        else {
             // For other domains or challenge types, use default handling
             completionHandler(.performDefaultHandling, nil)
             return
         }
-        
+
         // If we have no certificates to validate against, use default handling
         if certificates.isEmpty {
             completionHandler(.performDefaultHandling, nil)
             return
         }
-        
+
         // Set the anchor certificates for validation
         let policy = SecPolicyCreateSSL(true, domain as CFString)
         SecTrustSetAnchorCertificates(serverTrust, certificates as CFArray)
         SecTrustSetPolicies(serverTrust, [policy] as CFArray)
-        
+
         // Evaluate the trust
         var isValid = false
         if #available(iOS 13.0, macOS 10.15, *) {
@@ -94,7 +100,7 @@ private final class SSLPinningDelegate: NSObject, URLSessionDelegate {
             SecTrustEvaluate(serverTrust, &result)
             isValid = (result == .proceed || result == .unspecified)
         }
-        
+
         if isValid {
             // Certificate is valid, proceed with the connection
             let credential = URLCredential(trust: serverTrust)
@@ -104,4 +110,4 @@ private final class SSLPinningDelegate: NSObject, URLSessionDelegate {
             completionHandler(.cancelAuthenticationChallenge, nil)
         }
     }
-} 
+}
