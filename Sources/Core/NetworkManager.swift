@@ -12,9 +12,6 @@ import Security
 public protocol NetworkConnectivityProvider {
     /// Check if network is reachable
     func isNetworkReachable() async -> Bool
-
-    /// Check for a real internet connection by making a test request
-    func hasInternetConnection() async -> Bool
 }
 
 /// Protocol defining core network service functionality
@@ -57,7 +54,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         logger: NetworkLogger,
         responseProcessor: ResponseProcessorProtocol = DefaultResponseProcessor(),
         sslPinningStrategy: SSLPinningStrategy = SSLPinningDisabledStrategy(),
-        reachability: Reachability = Reachability.shared
+        reachability: Reachability = try! Reachability()
     ) {
         self.sslPinningStrategy = sslPinningStrategy
         self.reachability = reachability
@@ -74,15 +71,17 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         self.responseProcessor = responseProcessor
 
         // Start monitoring network connectivity
-        Task {
-            await reachability.startMonitoring()
+        do {
+            try reachability.startNotifier()
+        } catch {
+            print("Unable to start notifier")
         }
     }
 
     /// Deinitializer to clean up resources
     deinit {
         // Stop monitoring when the NetworkManager is deallocated
-        reachability.stopMonitoring()
+        reachability.stopNotifier()
     }
 
     public func performRequest<T: Decodable>(to endpoint: APIEndpoint) async -> Result<
@@ -159,13 +158,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     }
 
     public func isNetworkReachable() async -> Bool {
-        return await reachability.isConnected
-    }
-
-    /// Checks for a real internet connection by making a test request
-    /// This is more reliable than just checking interface connectivity
-    public func hasInternetConnection() async -> Bool {
-        return await reachability.checkInternetConnection()
+        return await reachability.isConnectedToNetwork
     }
 
     private func shouldRetryWithTokenRefresh(error: Error, attempt: Int) -> Bool {
