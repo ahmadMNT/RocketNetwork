@@ -12,10 +12,7 @@ import Foundation
 public protocol ErrorModel: Error, Decodable, Equatable {
     /// Human-readable error message
     var message: String { get }
-    
-    /// Optional error code for programmatic handling
-    var code: String? { get }
-    
+        
     /// Optional status code for programmatic handling
     var statusCode: Int? { get }
 }
@@ -25,9 +22,6 @@ public protocol ErrorModel: Error, Decodable, Equatable {
 public struct DefaultErrorModel: ErrorModel {
     /// Human-readable error message
     public let message: String
-    
-    /// Optional error code for programmatic handling
-    public let code: String?
 
     /// Optional status code for programmatic handling
     public let statusCode: Int?
@@ -36,15 +30,12 @@ public struct DefaultErrorModel: ErrorModel {
     /// Public initializer for creating error instances
     /// - Parameters:
     ///   - message: Human-readable error message
-    ///   - code: Optional error code for programmatic handling
     ///   - statusCode: Optional status code for programmatic handling
     public init(
         message: String,
-        code: String? = nil,
         statusCode: Int? = nil
     ) {
         self.message = message
-        self.code = code
         self.statusCode = statusCode
     }
 }
@@ -55,7 +46,6 @@ extension DefaultErrorModel {
     /// Custom coding keys for flexible decoding from various API response formats
     public enum CodingKeys: String, CodingKey {
         case message = "message"
-        case code = "code"
         case statusCode = "status_code"
     }
     
@@ -71,7 +61,6 @@ extension DefaultErrorModel {
         }
         
         // Decode optional fields
-        self.code = try? container.decodeIfPresent(String.self, forKey: .code)
         self.statusCode = try? container.decodeIfPresent(Int.self, forKey: .statusCode)
     }
 }
@@ -82,7 +71,6 @@ extension DefaultErrorModel {
     /// Equality comparison based on all properties
     public static func == (lhs: DefaultErrorModel, rhs: DefaultErrorModel) -> Bool {
         return lhs.message == rhs.message &&
-               lhs.code == rhs.code &&
                lhs.statusCode == rhs.statusCode
     }
 }
@@ -93,11 +81,7 @@ extension DefaultErrorModel {
     /// Returns a user-friendly description of the error
     public var description: String {
         var result = message
-        
-        if let code = code {
-            result += " (Code: \(code))"
-        }
-        
+                
         if let statusCode = statusCode {
             result += " (Status Code: \(statusCode))"
         }
