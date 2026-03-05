@@ -128,7 +128,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
                         currentAttempt: currentAttempt + 1
                     )
                 } catch {
-                    return .failure(NetworkError.unauthenticated)
+                    return .failure(NetworkError.unauthenticated(error: DefaultErrorModel(message: "Token refresh failed")))
                 }
             }
 

@@ -29,6 +29,20 @@ public struct ErrorModelConfiguration {
         DefaultErrorModelFactory.registerCustomErrorModel(errorType, forErrorCode: errorCode)
     }
     
+    /// Register a custom error model type for a specific status code
+    /// - Parameters:
+    ///   - errorType: The custom ErrorModel type
+    ///   - statusCode: The HTTP status code this type should handle
+    public static func registerCustomErrorModel<T: ErrorModel>(_ errorType: T.Type, forStatusCode statusCode: Int) {
+        DefaultErrorModelFactory.registerCustomErrorModel(errorType, forStatusCode: statusCode)
+    }
+    
+    /// Set the general error model type to use as fallback for all status codes
+    /// - Parameter errorType: The custom ErrorModel type to use as default
+    public static func setGeneralErrorModel<T: ErrorModel>(_ errorType: T.Type) {
+        defaultErrorModelType = errorType
+    }
+    
     /// Gets the appropriate error model factory
     /// - Returns: Configured error model factory
     public static func getErrorModelFactory() -> ErrorModelFactory {

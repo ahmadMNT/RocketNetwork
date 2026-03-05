@@ -72,7 +72,7 @@ public final class DefaultErrorModelFactory: ErrorModelFactory {
         return DefaultErrorModel(
             message: "Unknown server error",
             code: "UNKNOWN_ERROR",
-            details: ["Unable to parse error response from server"]
+            statusCode: 500
         )
     }
     
@@ -93,7 +93,7 @@ public final class DefaultErrorModelFactory: ErrorModelFactory {
                 return DefaultErrorModel(
                     message: message,
                     code: "API_ERROR",
-                    details: apiResponse.statusCode.map { ["Status code: \($0)"] }
+                    statusCode: apiResponse.statusCode
                 )
             }
         }
@@ -124,12 +124,23 @@ extension DefaultErrorModelFactory {
     /// Registry for custom error model types
     private static var customErrorModelTypes: [String: any ErrorModel.Type] = [:]
     
+    /// Registry for custom error model types by status code
+    private static var customErrorModelTypesByStatusCode: [Int: any ErrorModel.Type] = [:]
+    
     /// Registers a custom error model type for a specific error code
     /// - Parameters:
     ///   - errorType: The custom ErrorModel type
     ///   - errorCode: The error code this type should handle
     public static func registerCustomErrorModel<T: ErrorModel>(_ errorType: T.Type, forErrorCode errorCode: String) {
         customErrorModelTypes[errorCode] = errorType
+    }
+    
+    /// Registers a custom error model type for a specific status code
+    /// - Parameters:
+    ///   - errorType: The custom ErrorModel type
+    ///   - statusCode: The HTTP status code this type should handle
+    public static func registerCustomErrorModel<T: ErrorModel>(_ errorType: T.Type, forStatusCode statusCode: Int) {
+        customErrorModelTypesByStatusCode[statusCode] = errorType
     }
     
     /// Gets the custom error model type for a specific error code
@@ -139,14 +150,28 @@ extension DefaultErrorModelFactory {
         return customErrorModelTypes[errorCode]
     }
     
+    /// Gets the custom error model type for a specific status code
+    /// - Parameter statusCode: The HTTP status code to look up
+    /// - Returns: The custom ErrorModel type if registered, nil otherwise
+    public static func getCustomErrorModel(forStatusCode statusCode: Int) -> (any ErrorModel.Type)? {
+        return customErrorModelTypesByStatusCode[statusCode]
+    }
+    
     /// Removes a custom error model registration
     /// - Parameter errorCode: The error code to remove
     public static func unregisterCustomErrorModel(forErrorCode errorCode: String) {
         customErrorModelTypes.removeValue(forKey: errorCode)
     }
     
+    /// Removes a custom error model registration by status code
+    /// - Parameter statusCode: The HTTP status code to remove
+    public static func unregisterCustomErrorModel(forStatusCode statusCode: Int) {
+        customErrorModelTypesByStatusCode.removeValue(forKey: statusCode)
+    }
+    
     /// Clears all custom error model registrations
     public static func clearCustomErrorModels() {
         customErrorModelTypes.removeAll()
+        customErrorModelTypesByStatusCode.removeAll()
     }
 }

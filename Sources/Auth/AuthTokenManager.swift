@@ -32,7 +32,7 @@ public class AuthTokenManager: TokenManaging {
     /// - Throws: NetworkError if refresh fails
     public func refreshToken() async throws {
         guard let refreshToken = tokenStorage.getRefreshToken() else {
-            throw NetworkError.unauthenticated
+            throw NetworkError.unauthenticated(error: DefaultErrorModel(message: "No refresh token available"))
         }
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -59,7 +59,7 @@ public class AuthTokenManager: TokenManaging {
         // No access token, attempt to refresh
         guard tokenStorage.getRefreshToken() != nil else {
             // No refresh token either
-            completion(.failure(NetworkError.unauthenticated))
+            completion(.failure(NetworkError.unauthenticated(error: DefaultErrorModel(message: "No refresh token available"))))
             return
         }
 
@@ -84,7 +84,7 @@ public class AuthTokenManager: TokenManaging {
     /// - Parameter completion: Completion handler with the result
     public func refreshToken(completion: @escaping (Result<Void, NetworkError>) -> Void) {
         guard let refreshToken = tokenStorage.getRefreshToken() else {
-            completion(.failure(NetworkError.unauthenticated))
+            completion(.failure(NetworkError.unauthenticated(error: DefaultErrorModel(message: "No refresh token available"))))
             return
         }
 
