@@ -73,8 +73,14 @@ public protocol RetryBehavior {
     var retryCount: Int { get }
 }
 
+/// Protocol representing token refresh behavior for an API endpoint
+public protocol TokenRefreshBehavior {
+    /// Determines if this endpoint supports token refresh on authentication failure
+    var supportsTokenRefresh: Bool { get }
+}
+
 /// Represents an API endpoint for making network requests
-public protocol APIEndpoint: URLComponents, HTTPRequest, APIAuthentication, APIParameters, RetryBehavior {
+public protocol APIEndpoint: URLComponents, HTTPRequest, APIAuthentication, APIParameters, RetryBehavior, TokenRefreshBehavior {
     /// Builds the URLRequest for this endpoint
     func buildURLRequest() -> URLRequest
     
@@ -116,6 +122,10 @@ extension APIEndpoint {
     
     public var retryCount: Int {
         return 1  // Default to 1 retry
+    }
+    
+    public var supportsTokenRefresh: Bool {
+        return true  // Default to supporting token refresh for authenticated endpoints
     }
     
     public var queryParameters: [URLQueryItem] {

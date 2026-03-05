@@ -37,6 +37,9 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     private let sslPinningStrategy: SSLPinningStrategy
     private let reachability: Reachability
     
+    // Configuration for token refresh error types
+    public var tokenRefreshErrorTypes: [NetworkError.ErrorType] = [.unauthenticated, .forbidden]
+    
     // File uploader is optional and can be added if needed
     // private let fileUploader: FileUploader
     
@@ -124,51 +127,56 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             case .success(let success):
                 return .success(success)
             case .failure(let failure):
-                if shouldRetryWithTokenRefresh(error: failure, attempt: currentAttempt) {
-                    do {
-                        try await tokenManager.refreshToken()
-                        return await performRequestWithRetry(
-                            to: endpoint,
-                            currentAttempt: currentAttempt + 1
-                        )
-                    } catch {
-                        return .failure(failure)
-                    }
-                }else {
-                    return result
-                }
+                return await handleRequestFailure(failure, endpoint: endpoint, currentAttempt: currentAttempt)
             }
         } catch let error as NetworkError {
-            if shouldRetryWithTokenRefresh(error: error, attempt: currentAttempt) {
-                do {
-                    try await tokenManager.refreshToken()
-                    return await performRequestWithRetry(
-                        to: endpoint,
-                        currentAttempt: currentAttempt + 1
-                    )
-                } catch {
-                    return .failure(NetworkError.unauthenticated(error: DefaultErrorModel(message: "Token refresh failed")))
-                }
-            }
-            
-            // Check for network connectivity before retrying
-            if await !isNetworkReachable() {
-                logger.logError(NetworkError.noInternetConnection)
-                return .failure(NetworkError.noInternetConnection)
-            }
-            
-            if shouldRetry(attempt: currentAttempt, maxRetries: endpoint.retryCount) {
-                // Wait a second before retrying
-                try? await Task.sleep(nanoseconds: UInt64(1_000_000_000))
+            return await handleRequestFailure(error, endpoint: endpoint, currentAttempt: currentAttempt)
+        } catch {
+            return .failure(mapError(error))
+        }
+    }
+    
+    /// Handles request failures and determines retry strategy
+    /// - Parameters:
+    ///   - error: The error that occurred
+    ///   - endpoint: The API endpoint that was requested
+    ///   - currentAttempt: The current retry attempt number
+    /// - Returns: Result containing either the decoded data or an error
+    private func handleRequestFailure<T: Decodable>(
+        _ error: NetworkError,
+        endpoint: APIEndpoint,
+        currentAttempt: Int
+    ) async -> Result<T, NetworkError> {
+        // Check if we should retry with token refresh
+        if shouldRetryWithTokenRefresh(error: error, endpoint: endpoint, attempt: currentAttempt) {
+            do {
+                try await tokenManager.refreshToken()
                 return await performRequestWithRetry(
                     to: endpoint,
                     currentAttempt: currentAttempt + 1
                 )
-            } else {
+            } catch _ {
+                // Return the original error if token refresh fails
                 return .failure(error)
             }
-        } catch {
-            return .failure(mapError(error))
+        }
+        
+        // Check for network connectivity before retrying
+        if await !isNetworkReachable() {
+            logger.logError(NetworkError.noInternetConnection)
+            return .failure(NetworkError.noInternetConnection)
+        }
+        
+        // Check if we should retry for other reasons
+        if shouldRetry(attempt: currentAttempt, maxRetries: endpoint.retryCount) {
+            // Wait a second before retrying
+            try? await Task.sleep(nanoseconds: UInt64(1_000_000_000))
+            return await performRequestWithRetry(
+                to: endpoint,
+                currentAttempt: currentAttempt + 1
+            )
+        } else {
+            return .failure(error)
         }
     }
     
@@ -180,20 +188,17 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         return await reachability.isConnectedToNetwork
     }
     
-    private func shouldRetryWithTokenRefresh(error: Error, attempt: Int) -> Bool {
+    private func shouldRetryWithTokenRefresh(error: Error, endpoint: APIEndpoint, attempt: Int) -> Bool {
         guard let networkError = error as? NetworkError else {
             print("🔍 Error is not NetworkError: \(type(of: error))")
             return false
         }
         
-        print("🔍 Token refresh check:")
-        print("   Attempt: \(attempt)")
-        
-        let shouldRetry = (networkError.errorType == .unauthenticated || networkError.errorType == .forbidden) &&
+        let shouldRetry = endpoint.supportsTokenRefresh &&
+        tokenRefreshErrorTypes.contains(networkError.errorType) &&
         tokenManager.currentToken() != nil &&
         attempt == 0
         
-        print("   ShouldRetry: \(shouldRetry)")
         return shouldRetry
     }
     
