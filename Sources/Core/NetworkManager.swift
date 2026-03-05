@@ -118,7 +118,26 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             let (data, response) = try await session.data(for: request)
             logger.logResponse(response, data: data)
             
-            return try responseProcessor.process(data: data, response: response)
+            let result: Result<T, NetworkError> = try responseProcessor.process(data: data, response: response)
+            
+            switch result {
+            case .success(let success):
+                return .success(success)
+            case .failure(let failure):
+                if shouldRetryWithTokenRefresh(error: failure, attempt: currentAttempt) {
+                    do {
+                        try await tokenManager.refreshToken()
+                        return await performRequestWithRetry(
+                            to: endpoint,
+                            currentAttempt: currentAttempt + 1
+                        )
+                    } catch {
+                        return .failure(failure)
+                    }
+                }else {
+                    return result
+                }
+            }
         } catch let error as NetworkError {
             if shouldRetryWithTokenRefresh(error: error, attempt: currentAttempt) {
                 do {
@@ -168,12 +187,9 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         }
         
         print("🔍 Token refresh check:")
-        print("   ErrorType: \(networkError.errorType)")
-        print("   IsUnauthenticated: \(networkError.errorType == .unauthenticated)")
-        print("   CurrentToken: \(tokenManager.currentToken() != nil ? "✅" : "❌ nil")")
         print("   Attempt: \(attempt)")
         
-        let shouldRetry = networkError.errorType == .unauthenticated &&
+        let shouldRetry = (networkError.errorType == .unauthenticated || networkError.errorType == .forbidden) &&
         tokenManager.currentToken() != nil &&
         attempt == 0
         
@@ -250,3 +266,4 @@ extension NetworkManager {
         )
     }
 }
+ 
