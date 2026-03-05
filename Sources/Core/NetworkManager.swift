@@ -20,10 +20,10 @@ public protocol NetworkServiceProtocol {
     /// - Parameter endpoint: The API endpoint to request
     /// - Returns: Result containing either the decoded data or an error
     func performRequest<T: Decodable>(to endpoint: APIEndpoint) async -> Result<T, NetworkError>
-
+    
     /// Cancels all ongoing network requests
     func cancelAllRequests() async
-
+    
     /// Check if network is reachable
     func isNetworkReachable() async -> Bool
 }
@@ -36,10 +36,10 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     private let responseProcessor: ResponseProcessorProtocol
     private let sslPinningStrategy: SSLPinningStrategy
     private let reachability: Reachability
-
+    
     // File uploader is optional and can be added if needed
     // private let fileUploader: FileUploader
-
+    
     /// Initialize a NetworkManager with custom components
     /// - Parameters:
     ///   - session: URLSession to use for network requests
@@ -58,18 +58,18 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     ) {
         self.sslPinningStrategy = sslPinningStrategy
         self.reachability = reachability
-
+        
         if let delegate = sslPinningStrategy.createSessionDelegate() {
             let config = URLSessionConfiguration.default
             self.session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
         } else {
             self.session = session
         }
-
+        
         self.tokenManager = tokenManager
         self.logger = logger
         self.responseProcessor = responseProcessor
-
+        
         // Start monitoring network connectivity
         do {
             try reachability.startNotifier()
@@ -77,13 +77,13 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             print("Unable to start notifier")
         }
     }
-
+    
     /// Deinitializer to clean up resources
     deinit {
         // Stop monitoring when the NetworkManager is deallocated
         reachability.stopNotifier()
     }
-
+    
     public func performRequest<T: Decodable>(to endpoint: APIEndpoint) async -> Result<
         T, NetworkError
     > {
@@ -92,11 +92,11 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             logger.logError(NetworkError.noInternetConnection)
             return .failure(NetworkError.noInternetConnection)
         }
-
+        
         // Implementing the retry logic
         return await performRequestWithRetry(to: endpoint, currentAttempt: 0)
     }
-
+    
     /// Internal method handling the retry logic for requests
     /// - Parameters:
     ///   - endpoint: The API endpoint to request
@@ -110,14 +110,14 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         guard currentAttempt <= endpoint.retryCount else {
             return .failure(NetworkError.maxRetriesExceeded)
         }
-
+        
         do {
             let request = endpoint.buildURLRequest()
             logger.logRequest(request)
-
+            
             let (data, response) = try await session.data(for: request)
             logger.logResponse(response, data: data)
-
+            
             return try responseProcessor.process(data: data, response: response)
         } catch let error as NetworkError {
             if shouldRetryWithTokenRefresh(error: error, attempt: currentAttempt) {
@@ -131,13 +131,13 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
                     return .failure(NetworkError.unauthenticated(error: DefaultErrorModel(message: "Token refresh failed")))
                 }
             }
-
+            
             // Check for network connectivity before retrying
             if await !isNetworkReachable() {
                 logger.logError(NetworkError.noInternetConnection)
                 return .failure(NetworkError.noInternetConnection)
             }
-
+            
             if shouldRetry(attempt: currentAttempt, maxRetries: endpoint.retryCount) {
                 // Wait a second before retrying
                 try? await Task.sleep(nanoseconds: UInt64(1_000_000_000))
@@ -152,29 +152,39 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             return .failure(mapError(error))
         }
     }
-
+    
     public func cancelAllRequests() async {
         await session.invalidateAndCancel()
     }
-
+    
     public func isNetworkReachable() async -> Bool {
         return await reachability.isConnectedToNetwork
     }
-
+    
     private func shouldRetryWithTokenRefresh(error: Error, attempt: Int) -> Bool {
-        guard let networkError = error as? NetworkError,
-            networkError.errorType == .unauthenticated && tokenManager.currentToken() != nil,
-            attempt == 0
-        else {
+        guard let networkError = error as? NetworkError else {
+            print("🔍 Error is not NetworkError: \(type(of: error))")
             return false
         }
-        return true
+        
+        print("🔍 Token refresh check:")
+        print("   ErrorType: \(networkError.errorType)")
+        print("   IsUnauthenticated: \(networkError.errorType == .unauthenticated)")
+        print("   CurrentToken: \(tokenManager.currentToken() != nil ? "✅" : "❌ nil")")
+        print("   Attempt: \(attempt)")
+        
+        let shouldRetry = networkError.errorType == .unauthenticated &&
+        tokenManager.currentToken() != nil &&
+        attempt == 0
+        
+        print("   ShouldRetry: \(shouldRetry)")
+        return shouldRetry
     }
-
+    
     private func shouldRetry(attempt: Int, maxRetries: Int) -> Bool {
         return attempt < maxRetries
     }
-
+    
     private func mapError(_ error: Error) -> NetworkError {
         if let urlError = error as? URLError {
             switch urlError.code {
@@ -188,7 +198,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
                 break
             }
         }
-
+        
         if let networkError = error as? NetworkError {
             return networkError
         }
@@ -222,7 +232,7 @@ extension NetworkManager {
             sslPinningStrategy: sslPinningStrategy
         )
     }
-
+    
     /// Creates a NetworkManager without SSL pinning
     /// - Parameters:
     ///   - tokenManager: The token manager instance
