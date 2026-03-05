@@ -39,6 +39,18 @@ public protocol ResponseDecoder {
     /// - Parameter data: The response data that contains error information
     /// - Returns: NetworkError with extracted message
     func extractErrorFromData(_ data: Data) -> NetworkError
+    
+    /// Extract error model from response data
+    /// - Parameters:
+    ///   - data: The response data containing error information
+    ///   - type: The specific ErrorModel type to extract
+    /// - Returns: Error model instance if successful, nil otherwise
+    func extractErrorModel<E: ErrorModel>(from data: Data, type: E.Type) -> E?
+    
+    /// Extract error model using default error model type
+    /// - Parameter data: The response data containing error information
+    /// - Returns: Error model instance
+    func extractErrorModel(from data: Data) -> any ErrorModel
 }
 
 /// Simple error response structure used by some APIs
@@ -100,6 +112,16 @@ public final class StandardResponseDecoder: ResponseDecoder {
 
         return .invalidResponse
     }
+    
+    public func extractErrorModel<E: ErrorModel>(from data: Data, type: E.Type) -> E? {
+        let factory = DefaultErrorModelFactory(decoder: decoder)
+        return factory.createErrorModel(from: data, type: type)
+    }
+    
+    public func extractErrorModel(from data: Data) -> any ErrorModel {
+        let factory = DefaultErrorModelFactory(decoder: decoder)
+        return factory.extractErrorModel(from: data)
+    }
 }
 
 /// Default implementation of StatusCodeHandler
@@ -111,19 +133,19 @@ public final class StandardStatusCodeHandler: StatusCodeHandler {
         case ResponseStatus.ok, ResponseStatus.created:
             return  // Success, no error to throw
         case ResponseStatus.unauthenticated:
-            throw NetworkError.unauthenticated
+            throw NetworkError.unauthenticated(error: DefaultErrorModel(message: "Authentication required"))
         case ResponseStatus.expired:
-            throw NetworkError.tokenExpired
+            throw NetworkError.tokenExpired(error: DefaultErrorModel(message: "Session expired, please login again"))
         case ResponseStatus.badRequest:
-            throw NetworkError.badRequest
+            throw NetworkError.badRequest(error: DefaultErrorModel(message: "Bad request"))
         case ResponseStatus.validation:
-            throw NetworkError.validationError(message: "Validation error")
+            throw NetworkError.validationError(error: DefaultErrorModel(message: "Validation error"))
         case ResponseStatus.notFound:
             throw NetworkError.notFound
         case ResponseStatus.upgradeRequired:
-            throw NetworkError.appUpdateRequired
+            throw NetworkError.appUpdateRequired(error: DefaultErrorModel(message: "Please update your app to continue"))
         case ResponseStatus.noPermessions:
-            throw NetworkError.forbidden
+            throw NetworkError.forbidden(error: DefaultErrorModel(message: "You don't have permission to access this resource"))
         case ResponseStatus.serverError:
             throw NetworkError.serverError(statusCode: statusCode)
         default:
@@ -171,8 +193,11 @@ public final class DefaultResponseProcessor: ResponseProcessorProtocol {
             // Use extractErrorFromData for all non-authentication related errors
             // This way we always try to extract meaningful error messages from the response
             switch error {
-            case .unauthenticated, .tokenExpired, .forbidden, .appUpdateRequired:
-                // For these specific errors, just pass through the error as is
+            case .unauthenticated(let errorModel), .tokenExpired(let errorModel), .forbidden(let errorModel), .appUpdateRequired(let errorModel):
+                // If error already has a structured model, return it as is
+                return .failure(error)
+            case .badRequest(let errorModel), .validationError(let errorModel):
+                // If error already has a structured model, return it as is
                 return .failure(error)
             case .decodingError:
                 // Preserve the original decoding error

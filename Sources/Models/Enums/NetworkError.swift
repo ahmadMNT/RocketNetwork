@@ -13,10 +13,10 @@ public enum NetworkError: Error, Equatable {
     case invalidResponse
 
     /// User is not authenticated
-    case unauthenticated
+    case unauthenticated(error: any ErrorModel)
 
     /// User token has expired
-    case tokenExpired
+    case tokenExpired(error: any ErrorModel)
 
     /// Error occurred during JSON decoding
     case decodingError(Error)
@@ -28,7 +28,7 @@ public enum NetworkError: Error, Equatable {
     case serverMessage(message: String)
 
     /// Validation error with message
-    case validationError(message: String)
+    case validationError(error: any ErrorModel)
 
     /// Resource not found
     case notFound
@@ -40,10 +40,10 @@ public enum NetworkError: Error, Equatable {
     case canceled
 
     /// User doesn't have permission
-    case forbidden
+    case forbidden(error: any ErrorModel)
 
     /// App update is required
-    case appUpdateRequired
+    case appUpdateRequired(error: any ErrorModel)
 
     /// No internet connection available
     case noInternetConnection
@@ -52,11 +52,11 @@ public enum NetworkError: Error, Equatable {
     case requestTimedOut
 
     /// Bad request error (HTTP 400)
-    case badRequest
+    case badRequest(error: any ErrorModel)
 
     /// Generic error case with underlying error
     case unknownError
-
+    
     // MARK: - Error Message
 
     /// Human-readable error message
@@ -64,34 +64,34 @@ public enum NetworkError: Error, Equatable {
         switch self {
         case .invalidResponse:
             return "Invalid server response"
-        case .unauthenticated:
-            return "Authentication required"
-        case .tokenExpired:
-            return "Session expired, please login again"
+        case let .unauthenticated(errorModel):
+            return errorModel.message
+        case let .tokenExpired(errorModel):
+            return errorModel.message
         case let .decodingError(error):
             return "Could not process server response: \(error.localizedDescription)"
         case let .serverError(statusCode):
             return "Server error (\(statusCode))"
         case let .serverMessage(message):
             return message
-        case let .validationError(message):
-            return message
+        case let .validationError(errorModel):
+            return errorModel.message
         case .notFound:
             return "Resource not found"
         case .maxRetriesExceeded:
             return "Request failed after multiple attempts"
         case .canceled:
             return "Request was canceled"
-        case .forbidden:
-            return "You don't have permission to access this resource"
-        case .appUpdateRequired:
-            return "Please update your app to continue"
+        case let .forbidden(errorModel):
+            return errorModel.message
+        case let .appUpdateRequired(errorModel):
+            return errorModel.message
+        case let .badRequest(errorModel):
+            return errorModel.message
         case .noInternetConnection:
             return "No internet connection available"
         case .requestTimedOut:
             return "The request timed out"
-        case .badRequest:
-            return "Bad request"
         case .unknownError:
             return "An unknown error occurred"
         }
@@ -102,16 +102,18 @@ public enum NetworkError: Error, Equatable {
     /// The type of error
     public var errorType: ErrorType {
         switch self {
-        case .unauthenticated, .tokenExpired:
+        case .unauthenticated(_), .tokenExpired(_):
             return .unauthenticated
-        case .forbidden:
+        case .forbidden(_):
             return .forbidden
-        case .appUpdateRequired:
+        case .appUpdateRequired(_):
             return .upgradeRequired
+        case .validationError(_), .badRequest(_):
+            return .general
         case .noInternetConnection, .requestTimedOut:
             return .connectivity
         case .invalidResponse, .decodingError, .serverError, .maxRetriesExceeded, .canceled,
-            .unknownError, .serverMessage, .validationError, .notFound, .badRequest:
+            .unknownError, .serverMessage, .notFound:
             return .general
         }
     }
@@ -121,15 +123,15 @@ public enum NetworkError: Error, Equatable {
         switch self {
         case .invalidResponse:
             return 500
-        case .unauthenticated, .tokenExpired:
+        case .unauthenticated(_), .tokenExpired(_):
             return 401
-        case .forbidden:
+        case .forbidden(_):
             return 403
         case .notFound:
             return 404
-        case .badRequest, .validationError:
+        case .validationError(_), .badRequest(_):
             return 400
-        case .appUpdateRequired:
+        case .appUpdateRequired(_):
             return 426
         case .serverError(let code):
             return code
@@ -164,33 +166,33 @@ public enum NetworkError: Error, Equatable {
         switch (lhs, rhs) {
         case (.invalidResponse, .invalidResponse):
             return true
-        case (.unauthenticated, .unauthenticated):
-            return true
-        case (.tokenExpired, .tokenExpired):
-            return true
+        case let (.unauthenticated(lhsError), .unauthenticated(rhsError)):
+            return lhsError.message == rhsError.message
+        case let (.tokenExpired(lhsError), .tokenExpired(rhsError)):
+            return lhsError.message == rhsError.message
         case (.maxRetriesExceeded, .maxRetriesExceeded):
             return true
         case (.canceled, .canceled):
             return true
         case (.notFound, .notFound):
             return true
-        case (.forbidden, .forbidden):
-            return true
-        case (.appUpdateRequired, .appUpdateRequired):
-            return true
+        case let (.forbidden(lhsError), .forbidden(rhsError)):
+            return lhsError.message == rhsError.message
+        case let (.appUpdateRequired(lhsError), .appUpdateRequired(rhsError)):
+            return lhsError.message == rhsError.message
+        case let (.validationError(lhsError), .validationError(rhsError)):
+            return lhsError.message == rhsError.message
+        case let (.badRequest(lhsError), .badRequest(rhsError)):
+            return lhsError.message == rhsError.message
         case (.unknownError, .unknownError):
             return true
         case (.noInternetConnection, .noInternetConnection):
             return true
         case (.requestTimedOut, .requestTimedOut):
             return true
-        case (.badRequest, .badRequest):
-            return true
         case let (.serverError(lhsCode), .serverError(rhsCode)):
             return lhsCode == rhsCode
         case let (.serverMessage(lhsMsg), .serverMessage(rhsMsg)):
-            return lhsMsg == rhsMsg
-        case let (.validationError(lhsMsg), .validationError(rhsMsg)):
             return lhsMsg == rhsMsg
         case (.decodingError, .decodingError):
             // These can't be directly compared because they contain errors
@@ -204,7 +206,7 @@ public enum NetworkError: Error, Equatable {
 
     /// A simple unauthorized error - for compatibility with code using 'unauthorized'
     public static var unauthorized: NetworkError {
-        return .unauthenticated
+        return .unauthenticated(error: DefaultErrorModel(message: "Authentication required"))
     }
 
     /// A simple server error - for compatibility with code using 'serverError'
