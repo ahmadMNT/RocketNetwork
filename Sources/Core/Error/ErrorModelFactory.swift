@@ -71,7 +71,6 @@ public final class DefaultErrorModelFactory: ErrorModelFactory {
         // Final fallback - create a generic error
         return DefaultErrorModel(
             message: "Unknown server error",
-            code: "UNKNOWN_ERROR",
             statusCode: 500
         )
     }
@@ -92,7 +91,6 @@ public final class DefaultErrorModelFactory: ErrorModelFactory {
             if let message = apiResponse.message {
                 return DefaultErrorModel(
                     message: message,
-                    code: "API_ERROR",
                     statusCode: apiResponse.statusCode
                 )
             }
