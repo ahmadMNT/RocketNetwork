@@ -136,7 +136,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         }
     }
     
-    /// Handles request failures and determines retry strategy
+    /// Handles request failures and determines retry strategy with enhanced token management
     /// - Parameters:
     ///   - error: The error that occurred
     ///   - endpoint: The API endpoint that was requested
@@ -147,17 +147,23 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         endpoint: APIEndpoint,
         currentAttempt: Int
     ) async -> Result<T, NetworkError> {
-        // Check if we should retry with token refresh
+        // Check if we should retry with enhanced token refresh
         if shouldRetryWithTokenRefresh(error: error, endpoint: endpoint, attempt: currentAttempt) {
-            do {
-                try await tokenManager.refreshToken()
-                return await performRequestWithRetry(
-                    to: endpoint,
-                    currentAttempt: currentAttempt + 1
+            // Use enhanced token manager with error preservation
+            if let enhancedTokenManager = tokenManager as? EnhancedTokenManager {
+                return await performEnhancedTokenRefresh(
+                    originalError: error,
+                    endpoint: endpoint,
+                    currentAttempt: currentAttempt,
+                    enhancedTokenManager: enhancedTokenManager
                 )
-            } catch _ {
-                // Return the original error if token refresh fails
-                return .failure(error)
+            } else {
+                // Fallback to legacy refresh for compatibility
+                return await performLegacyTokenRefresh(
+                    originalError: error,
+                    endpoint: endpoint,
+                    currentAttempt: currentAttempt
+                )
             }
         }
         
@@ -177,6 +183,54 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             )
         } else {
             return .failure(error)
+        }
+    }
+    
+    /// Perform enhanced token refresh with error preservation
+    /// - Parameters:
+    ///   - originalError: The original error that triggered refresh
+    ///   - endpoint: The endpoint that was requested
+    ///   - currentAttempt: Current attempt count
+    ///   - enhancedTokenManager: Enhanced token manager instance
+    /// - Returns: Result with original error preserved if refresh fails
+    private func performEnhancedTokenRefresh<T: Decodable>(
+        originalError: NetworkError,
+        endpoint: APIEndpoint,
+        currentAttempt: Int,
+        enhancedTokenManager: EnhancedTokenManager
+    ) async -> Result<T, NetworkError> {
+        do {
+            try await enhancedTokenManager.refreshToken()
+            return await performRequestWithRetry(
+                to: endpoint,
+                currentAttempt: currentAttempt + 1
+            )
+        } catch {
+            // Return original error to preserve context
+            return .failure(originalError)
+        }
+    }
+    
+    /// Perform legacy token refresh for backward compatibility
+    /// - Parameters:
+    ///   - originalError: The original error that triggered refresh
+    ///   - endpoint: The endpoint that was requested
+    ///   - currentAttempt: Current attempt count
+    /// - Returns: Result with original error preserved if refresh fails
+    private func performLegacyTokenRefresh<T: Decodable>(
+        originalError: NetworkError,
+        endpoint: APIEndpoint,
+        currentAttempt: Int
+    ) async -> Result<T, NetworkError> {
+        do {
+            try await tokenManager.refreshToken()
+            return await performRequestWithRetry(
+                to: endpoint,
+                currentAttempt: currentAttempt + 1
+            )
+        } catch {
+            // Return original error to preserve context
+            return .failure(originalError)
         }
     }
     
