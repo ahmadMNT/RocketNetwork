@@ -196,7 +196,6 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         
         let shouldRetry = endpoint.supportsTokenRefresh &&
         tokenRefreshErrorTypes.contains(networkError.errorType) &&
-        tokenManager.currentToken() != nil &&
         attempt == 0
         
         return shouldRetry
