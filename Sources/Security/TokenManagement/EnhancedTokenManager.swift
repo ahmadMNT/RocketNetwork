@@ -12,7 +12,7 @@ public final class EnhancedTokenManager: TokenManaging {
     // MARK: - Properties
     
     private let tokenStorage: TokenStorage
-    private var refreshCoordinator: TokenRefreshCoordinator?
+    private let refreshCoordinator: TokenRefreshCoordinator
     private let configuration: TokenRefreshConfiguration
     
     // Thread-safe token caching
@@ -25,11 +25,11 @@ public final class EnhancedTokenManager: TokenManaging {
     /// Initialize enhanced token manager
     /// - Parameters:
     ///   - tokenStorage: Storage for tokens
-    ///   - refreshCoordinator: Coordinator for refresh operations (optional for circular dependency)
+    ///   - refreshCoordinator: Coordinator for refresh operations
     ///   - configuration: Refresh configuration
     public init(
         tokenStorage: TokenStorage,
-        refreshCoordinator: TokenRefreshCoordinator? = nil,
+        refreshCoordinator: TokenRefreshCoordinator,
         configuration: TokenRefreshConfiguration = TokenRefreshConfiguration()
     ) {
         self.tokenStorage = tokenStorage
@@ -40,7 +40,7 @@ public final class EnhancedTokenManager: TokenManaging {
         self.cachedToken = tokenStorage.getAccessToken()
     }
     
-    /// Initialize enhanced token manager with custom refresh strategy
+    /// Initialize with custom refresh strategy
     /// - Parameters:
     ///   - tokenStorage: Storage for tokens
     ///   - strategies: Array of refresh strategies
@@ -50,18 +50,12 @@ public final class EnhancedTokenManager: TokenManaging {
         strategies: [TokenRefreshStrategy],
         configuration: TokenRefreshConfiguration = TokenRefreshConfiguration()
     ) {
-        // Initialize with nil coordinator first to break circular dependency
-        self.init(tokenStorage: tokenStorage, refreshCoordinator: nil, configuration: configuration)
-        
-        // Create coordinator after self is initialized
         let coordinator = TokenRefreshCoordinator(
             strategies: strategies,
             configuration: configuration,
-            tokenManager: self
+            tokenManager: Self(tokenStorage: tokenStorage, configuration: configuration)
         )
-        
-        // Set coordinator property
-        self.refreshCoordinator = coordinator
+        self.init(tokenStorage: tokenStorage, refreshCoordinator: coordinator, configuration: configuration)
     }
     
     // MARK: - TokenManaging Implementation
@@ -103,7 +97,7 @@ public final class EnhancedTokenManager: TokenManaging {
         let requestId = TokenRefreshCoordinator.generateRequestId()
         
         return try await withCheckedThrowingContinuation { continuation in
-            refreshCoordinator?.attemptRefresh(
+            refreshCoordinator.attemptRefresh(
                 for: NetworkError.unauthenticated(
                     error: DefaultErrorModel(message: "Token refresh required")
                 ),
@@ -188,7 +182,7 @@ public final class EnhancedTokenManager: TokenManaging {
     ) {
         let requestId = TokenRefreshCoordinator.generateRequestId(for: endpoint, url: endpoint.baseURL)
         
-        refreshCoordinator?.attemptRefresh(
+        refreshCoordinator.attemptRefresh(
             for: error,
             endpoint: endpoint,
             requestId: requestId
@@ -237,7 +231,7 @@ public final class EnhancedTokenManager: TokenManaging {
         tokenStorage.storeRefreshToken(nil)
         cachedToken = nil
         lastTokenRefresh = nil
-        refreshCoordinator?.clearAllTracking()
+        refreshCoordinator.clearAllTracking()
     }
     
     // MARK: - Private Methods
