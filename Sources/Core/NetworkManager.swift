@@ -103,7 +103,10 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         T, NetworkError
     > {
         let requestId = UUID().uuidString.prefix(8)
+        let isTokenRefreshRequest = endpoint.isTokenRefreshRequest
+        
         print("🚀 [\(requestId)] Starting new request to: \(endpoint)")
+        print("🚀 [\(requestId)] Is token refresh request: \(isTokenRefreshRequest)")
         print("🚀 [\(requestId)] Initial hasAttemptedTokenRefresh: \(hasAttemptedTokenRefresh)")
         
         // Check for network connectivity before attempting the request
@@ -112,9 +115,13 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             return .failure(NetworkError.noInternetConnection)
         }
         
-        // Reset token refresh flag for new request
-        hasAttemptedTokenRefresh = false
-        print("🚀 [\(requestId)] Reset hasAttemptedTokenRefresh to: \(hasAttemptedTokenRefresh)")
+        // Reset token refresh flag for new request (but not for token refresh requests)
+        if !isTokenRefreshRequest {
+            hasAttemptedTokenRefresh = false
+            print("🚀 [\(requestId)] Reset hasAttemptedTokenRefresh to: \(hasAttemptedTokenRefresh)")
+        } else {
+            print("🚀 [\(requestId)] Skipping flag reset for token refresh request")
+        }
         
         // Implementing the retry logic
         let result: Result<T, NetworkError> = await performRequestWithRetry(to: endpoint, currentAttempt: 0, requestId: String(requestId))

@@ -77,6 +77,9 @@ public protocol RetryBehavior {
 public protocol TokenRefreshBehavior {
     /// Determines if this endpoint supports token refresh on authentication failure
     var supportsTokenRefresh: Bool { get }
+    
+    /// Determines if this endpoint is specifically for token refresh
+    var isTokenRefreshRequest: Bool { get }
 }
 
 /// Represents an API endpoint for making network requests
@@ -126,6 +129,10 @@ extension APIEndpoint {
     
     public var supportsTokenRefresh: Bool {
         return true  // Default to supporting token refresh for authenticated endpoints
+    }
+    
+    public var isTokenRefreshRequest: Bool {
+        return false  // Default to false - only token refresh endpoints should override this
     }
     
     public var queryParameters: [URLQueryItem] {
