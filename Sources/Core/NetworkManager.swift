@@ -102,8 +102,9 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     public func performRequest<T: Decodable>(to endpoint: APIEndpoint) async -> Result<
         T, NetworkError
     > {
-        print("🚀 Starting new request to: \(endpoint)")
-        print("🚀 Initial hasAttemptedTokenRefresh: \(hasAttemptedTokenRefresh)")
+        let requestId = UUID().uuidString.prefix(8)
+        print("🚀 [\(requestId)] Starting new request to: \(endpoint)")
+        print("🚀 [\(requestId)] Initial hasAttemptedTokenRefresh: \(hasAttemptedTokenRefresh)")
         
         // Check for network connectivity before attempting the request
         if await !isNetworkReachable() {
@@ -113,23 +114,30 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         
         // Reset token refresh flag for new request
         hasAttemptedTokenRefresh = false
-        print("🚀 Reset hasAttemptedTokenRefresh to: \(hasAttemptedTokenRefresh)")
+        print("🚀 [\(requestId)] Reset hasAttemptedTokenRefresh to: \(hasAttemptedTokenRefresh)")
         
         // Implementing the retry logic
-        return await performRequestWithRetry(to: endpoint, currentAttempt: 0)
+        let result: Result<T, NetworkError> = await performRequestWithRetry(to: endpoint, currentAttempt: 0, requestId: String(requestId))
+        print("🏁 [\(requestId)] Request completed with result: \(result)")
+        return result
     }
     
     /// Internal method handling the retry logic for requests
     /// - Parameters:
     ///   - endpoint: The API endpoint to request
     ///   - currentAttempt: The current retry attempt number
+    ///   - requestId: Unique identifier for tracking the request
     /// - Returns: Result containing either the decoded data or an error
     private func performRequestWithRetry<T: Decodable>(
         to endpoint: APIEndpoint,
-        currentAttempt: Int
+        currentAttempt: Int,
+        requestId: String
     ) async -> Result<T, NetworkError> {
+        print("🔄 [\(requestId)] performRequestWithRetry called - attempt: \(currentAttempt), hasAttemptedTokenRefresh: \(hasAttemptedTokenRefresh)")
+        
         // Check if we've exceeded retry count
         guard currentAttempt <= endpoint.retryCount else {
+            print("❌ [\(requestId)] Max retries exceeded")
             return .failure(NetworkError.maxRetriesExceeded)
         }
         
@@ -146,10 +154,10 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             case .success(let success):
                 return .success(success)
             case .failure(let failure):
-                return await handleRequestFailure(failure, endpoint: endpoint, currentAttempt: currentAttempt)
+                return await handleRequestFailure(failure, endpoint: endpoint, currentAttempt: currentAttempt, requestId: requestId)
             }
         } catch let error as NetworkError {
-            return await handleRequestFailure(error, endpoint: endpoint, currentAttempt: currentAttempt)
+            return await handleRequestFailure(error, endpoint: endpoint, currentAttempt: currentAttempt, requestId: requestId)
         } catch {
             return .failure(mapError(error))
         }
@@ -160,18 +168,25 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     ///   - error: The error that occurred
     ///   - endpoint: The API endpoint that was requested
     ///   - currentAttempt: The current retry attempt number
+    ///   - requestId: Unique identifier for tracking the request
     /// - Returns: Result containing either the decoded data or an error
     private func handleRequestFailure<T: Decodable>(
         _ error: NetworkError,
         endpoint: APIEndpoint,
-        currentAttempt: Int
+        currentAttempt: Int,
+        requestId: String
     ) async -> Result<T, NetworkError> {
+        print("🔥 [\(requestId)] handleRequestFailure called - error: \(error.errorType), attempt: \(currentAttempt), hasAttemptedTokenRefresh: \(hasAttemptedTokenRefresh)")
+        
         // Attempt token refresh if needed (only once)
         if shouldAttemptTokenRefresh(error: error, endpoint: endpoint, attempt: currentAttempt) {
+            print("🔄 [\(requestId)] Attempting token refresh...")
             let refreshSuccess = await performTokenRefresh()
             if refreshSuccess {
-                return await performRequestWithRetry(to: endpoint, currentAttempt: currentAttempt + 1)
+                print("✅ [\(requestId)] Token refresh successful, retrying request...")
+                return await performRequestWithRetry(to: endpoint, currentAttempt: currentAttempt + 1, requestId: requestId)
             } else {
+                print("❌ [\(requestId)] Token refresh failed, returning original error")
                 return .failure(error)
             }
         }
@@ -185,7 +200,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         // Check if we should retry for other reasons
         if shouldRetry(attempt: currentAttempt, maxRetries: endpoint.retryCount) {
             try? await Task.sleep(nanoseconds: UInt64(1_000_000_000))
-            return await performRequestWithRetry(to: endpoint, currentAttempt: currentAttempt + 1)
+            return await performRequestWithRetry(to: endpoint, currentAttempt: currentAttempt + 1, requestId: requestId)
         } else {
             return .failure(error)
         }
