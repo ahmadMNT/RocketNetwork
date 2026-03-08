@@ -102,6 +102,9 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     public func performRequest<T: Decodable>(to endpoint: APIEndpoint) async -> Result<
         T, NetworkError
     > {
+        print("🚀 Starting new request to: \(endpoint)")
+        print("🚀 Initial hasAttemptedTokenRefresh: \(hasAttemptedTokenRefresh)")
+        
         // Check for network connectivity before attempting the request
         if await !isNetworkReachable() {
             logger.logError(NetworkError.noInternetConnection)
@@ -110,6 +113,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         
         // Reset token refresh flag for new request
         hasAttemptedTokenRefresh = false
+        print("🚀 Reset hasAttemptedTokenRefresh to: \(hasAttemptedTokenRefresh)")
         
         // Implementing the retry logic
         return await performRequestWithRetry(to: endpoint, currentAttempt: 0)
@@ -202,26 +206,48 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     ///   - attempt: The current retry attempt number
     /// - Returns: True if token refresh should be attempted
     private func shouldAttemptTokenRefresh(error: NetworkError, endpoint: APIEndpoint, attempt: Int) -> Bool {
-        return endpoint.supportsTokenRefresh &&
-               tokenRefreshErrorTypes.contains(error.errorType) &&
-               !hasAttemptedTokenRefresh &&
-               attempt == 0
+        let shouldRefresh = endpoint.supportsTokenRefresh &&
+                           tokenRefreshErrorTypes.contains(error.errorType) &&
+                           !hasAttemptedTokenRefresh &&
+                           attempt == 0
+        
+        if shouldRefresh {
+            print("🔄 Token refresh conditions met - attempting refresh")
+            print("   - endpoint.supportsTokenRefresh: \(endpoint.supportsTokenRefresh)")
+            print("   - error type: \(error.errorType)")
+            print("   - hasAttemptedTokenRefresh: \(hasAttemptedTokenRefresh)")
+            print("   - attempt: \(attempt)")
+        } else {
+            print("🚫 Token refresh conditions not met")
+            print("   - endpoint.supportsTokenRefresh: \(endpoint.supportsTokenRefresh)")
+            print("   - error type: \(error.errorType)")
+            print("   - hasAttemptedTokenRefresh: \(hasAttemptedTokenRefresh)")
+            print("   - attempt: \(attempt)")
+        }
+        
+        return shouldRefresh
     }
     
     /// Performs token refresh using custom handler or token manager
     /// - Returns: Success if refresh succeeded, failure otherwise
     private func performTokenRefresh() async -> Bool {
+        print("🔄 performTokenRefresh called - hasAttemptedTokenRefresh was: \(hasAttemptedTokenRefresh)")
         hasAttemptedTokenRefresh = true
+        print("🔄 hasAttemptedTokenRefresh set to: \(hasAttemptedTokenRefresh)")
         
         do {
             // Use custom handler if provided, otherwise use token manager
             if let customHandler = tokenRefreshHandler {
+                print("🔄 Using custom token refresh handler")
                 try await customHandler.refreshToken()
             } else {
+                print("🔄 Using default token manager")
                 try await tokenManager.refreshToken()
             }
+            print("✅ Token refresh successful")
             return true
         } catch {
+            print("❌ Token refresh failed: \(error)")
             return false
         }
     }
