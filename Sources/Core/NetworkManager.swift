@@ -160,7 +160,8 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
                     currentAttempt: currentAttempt + 1
                 )
             } catch _ {
-                // Return the original error if token refresh fails
+                // Token refresh failed - ensure we don't retry again and return the original error
+                hasAttemptedTokenRefresh = true
                 return .failure(error)
             }
         }
