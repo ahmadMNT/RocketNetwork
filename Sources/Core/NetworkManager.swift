@@ -28,6 +28,13 @@ public protocol NetworkServiceProtocol {
     func isNetworkReachable() async -> Bool
 }
 
+/// Protocol for custom token refresh implementations
+public protocol TokenRefreshHandler {
+    /// Refresh the authentication token
+    /// - Throws: Error if refresh fails
+    func refreshToken() async throws
+}
+
 /// Main implementation of the NetworkServiceProtocol
 public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityProvider {
     private let session: URLSession
@@ -36,6 +43,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     private let responseProcessor: ResponseProcessorProtocol
     private let sslPinningStrategy: SSLPinningStrategy
     private let reachability: Reachability
+    private let tokenRefreshHandler: TokenRefreshHandler?
     private var hasAttemptedTokenRefresh = false
     
     // Configuration for token refresh error types
@@ -52,14 +60,17 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     ///   - responseProcessor: Processor for API responses
     ///   - sslPinningStrategy: Strategy for SSL certificate pinning
     ///   - reachability: Reachability checker for network connectivity
+    ///   - tokenRefreshHandler: Custom handler for token refresh (optional)
     public init(
         session: URLSession = .shared,
         tokenManager: TokenManaging,
         logger: NetworkLogger,
         responseProcessor: ResponseProcessorProtocol = DefaultResponseProcessor(),
         sslPinningStrategy: SSLPinningStrategy = SSLPinningDisabledStrategy(),
-        reachability: Reachability = try! Reachability()
+        reachability: Reachability = try! Reachability(),
+        tokenRefreshHandler: TokenRefreshHandler? = nil
     ) {
+        self.tokenRefreshHandler = tokenRefreshHandler
         self.sslPinningStrategy = sslPinningStrategy
         self.reachability = reachability
         
@@ -151,18 +162,12 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         endpoint: APIEndpoint,
         currentAttempt: Int
     ) async -> Result<T, NetworkError> {
-        // Check if we should retry with token refresh
-        if shouldRetryWithTokenRefresh(error: error, endpoint: endpoint, attempt: currentAttempt) {
-            hasAttemptedTokenRefresh = true
-            do {
-                
-                try await tokenManager.refreshToken()
-                return await performRequestWithRetry(
-                    to: endpoint,
-                    currentAttempt: currentAttempt + 1
-                )
-            } catch _ {
-                // return the original error
+        // Attempt token refresh if needed (only once)
+        if shouldAttemptTokenRefresh(error: error, endpoint: endpoint, attempt: currentAttempt) {
+            let refreshSuccess = await performTokenRefresh()
+            if refreshSuccess {
+                return await performRequestWithRetry(to: endpoint, currentAttempt: currentAttempt + 1)
+            } else {
                 return .failure(error)
             }
         }
@@ -175,12 +180,8 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         
         // Check if we should retry for other reasons
         if shouldRetry(attempt: currentAttempt, maxRetries: endpoint.retryCount) {
-            // Wait a second before retrying
             try? await Task.sleep(nanoseconds: UInt64(1_000_000_000))
-            return await performRequestWithRetry(
-                to: endpoint,
-                currentAttempt: currentAttempt + 1
-            )
+            return await performRequestWithRetry(to: endpoint, currentAttempt: currentAttempt + 1)
         } else {
             return .failure(error)
         }
@@ -194,22 +195,35 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         return await reachability.isConnectedToNetwork
     }
     
-    private func shouldRetryWithTokenRefresh(error: Error, endpoint: APIEndpoint, attempt: Int) -> Bool {
-        guard let networkError = error as? NetworkError else {
-            print("🔍 Error is not NetworkError: \(type(of: error))")
+    /// Determines if token refresh should be attempted
+    /// - Parameters:
+    ///   - error: The error that occurred
+    ///   - endpoint: The API endpoint that was requested
+    ///   - attempt: The current retry attempt number
+    /// - Returns: True if token refresh should be attempted
+    private func shouldAttemptTokenRefresh(error: NetworkError, endpoint: APIEndpoint, attempt: Int) -> Bool {
+        return endpoint.supportsTokenRefresh &&
+               tokenRefreshErrorTypes.contains(error.errorType) &&
+               !hasAttemptedTokenRefresh &&
+               attempt == 0
+    }
+    
+    /// Performs token refresh using custom handler or token manager
+    /// - Returns: Success if refresh succeeded, failure otherwise
+    private func performTokenRefresh() async -> Bool {
+        hasAttemptedTokenRefresh = true
+        
+        do {
+            // Use custom handler if provided, otherwise use token manager
+            if let customHandler = tokenRefreshHandler {
+                try await customHandler.refreshToken()
+            } else {
+                try await tokenManager.refreshToken()
+            }
+            return true
+        } catch {
             return false
         }
-        
-        let shouldRetry = endpoint.supportsTokenRefresh &&
-        tokenRefreshErrorTypes.contains(networkError.errorType) &&
-        !hasAttemptedTokenRefresh &&
-        attempt == 0
-        
-        if shouldRetry {
-            hasAttemptedTokenRefresh = true
-        }
-        
-        return shouldRetry
     }
     
     private func shouldRetry(attempt: Int, maxRetries: Int) -> Bool {
