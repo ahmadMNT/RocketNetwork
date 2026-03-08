@@ -153,15 +153,16 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     ) async -> Result<T, NetworkError> {
         // Check if we should retry with token refresh
         if shouldRetryWithTokenRefresh(error: error, endpoint: endpoint, attempt: currentAttempt) {
+            hasAttemptedTokenRefresh = true
             do {
+                
                 try await tokenManager.refreshToken()
                 return await performRequestWithRetry(
                     to: endpoint,
                     currentAttempt: currentAttempt + 1
                 )
             } catch _ {
-                // Token refresh failed - ensure we don't retry again and return the original error
-                hasAttemptedTokenRefresh = true
+                // return the original error
                 return .failure(error)
             }
         }
