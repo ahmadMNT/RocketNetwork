@@ -36,6 +36,7 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
     private let responseProcessor: ResponseProcessorProtocol
     private let sslPinningStrategy: SSLPinningStrategy
     private let reachability: Reachability
+    private var hasAttemptedTokenRefresh = false
     
     // Configuration for token refresh error types
     public var tokenRefreshErrorTypes: [NetworkError.ErrorType] = [.unauthenticated, .forbidden]
@@ -95,6 +96,9 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
             logger.logError(NetworkError.noInternetConnection)
             return .failure(NetworkError.noInternetConnection)
         }
+        
+        // Reset token refresh flag for new request
+        hasAttemptedTokenRefresh = false
         
         // Implementing the retry logic
         return await performRequestWithRetry(to: endpoint, currentAttempt: 0)
@@ -196,7 +200,12 @@ public final class NetworkManager: NetworkServiceProtocol, NetworkConnectivityPr
         
         let shouldRetry = endpoint.supportsTokenRefresh &&
         tokenRefreshErrorTypes.contains(networkError.errorType) &&
+        !hasAttemptedTokenRefresh &&
         attempt == 0
+        
+        if shouldRetry {
+            hasAttemptedTokenRefresh = true
+        }
         
         return shouldRetry
     }
