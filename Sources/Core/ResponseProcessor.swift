@@ -198,7 +198,7 @@ public final class DefaultResponseProcessor: ResponseProcessorProtocol {
                 return .failure(error)
             case .badRequest(let errorModel), .validationError(let errorModel):
                 // If error already has a structured model, return it as is
-                return .failure(error)
+                return .failure(decoder.extractErrorFromData(data))
             case .decodingError:
                 // Preserve the original decoding error
                 return .failure(error)
